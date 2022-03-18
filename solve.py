@@ -3,6 +3,8 @@ from math import ceil
 import json
 import os
 
+import ipv4
+
 
 # parity bit lookup table for all 7 bit integers
 PARITY_TABLE = {i: 0 if bin(i).count('1') % 2 == 0 else 1 for i in range(0x80)}
@@ -69,7 +71,7 @@ def extract(path):
     return data[start:end].replace('\n', '').replace(' ', '')
 
 
-def decode(s, conv=chr):
+def decode(s, conv=lambda x: x):
     """
     decode an ascii85 payload that has had whitespace stripped
     """
@@ -98,7 +100,7 @@ def decode(s, conv=chr):
 def layer0():
     """ perform decoding of layer 1 """
     with open('l1.txt', 'w') as f:
-        f.write(''.join(decode(extract('l0.txt'))))
+        f.write(''.join(decode(extract('l0.txt'), chr)))
 
 
 def layer1():
@@ -113,7 +115,7 @@ def layer1():
 
 def layer2():
     """ perform decoding of layer 3 """
-    data = list(filter(parity, decode(extract('l2.txt'), lambda x: x)))
+    data = list(filter(parity, decode(extract('l2.txt'))))
     output = []
     byte = 0
     for i, b in enumerate(data):
@@ -132,12 +134,28 @@ def layer3():
     with open('key.json', 'r') as f:
         key = json.load(f)
 
-    data = decode(extract('l3.txt'), lambda x: x)
+    data = decode(extract('l3.txt'))
     output = []
     for e, k in zip(data, cycle(key)):
         output.append(chr(e ^ k))
 
     with open('l4.txt', 'w') as f:
+        f.write(''.join(output))
+
+
+def layer4():
+    """ perform decoding of layer 5 """
+    data = bytes(decode(extract('l4.txt')))
+    output = []
+    offset = 0
+    max_offset = len(data)
+    while offset < max_offset:
+        p = ipv4.IPv4Packet(data[offset:])
+        offset += p.total_length
+        if p.valid:
+            output.append(p.data.content.decode('ascii'))
+
+    with open('l5.txt', 'w') as f:
         f.write(''.join(output))
 
 
@@ -150,3 +168,5 @@ if __name__ == '__main__':
         layer2()
     if not os.path.exists('l4.txt'):
         layer3()
+    if not os.path.exists('l5.txt'):
+        layer4()
