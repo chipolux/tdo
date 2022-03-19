@@ -1,13 +1,12 @@
-from itertools import cycle
-from math import ceil
 import json
 import os
+from itertools import cycle
+from math import ceil
 
 import ipv4
 
-
 # parity bit lookup table for all 7 bit integers
-PARITY_TABLE = {i: 0 if bin(i).count('1') % 2 == 0 else 1 for i in range(0x80)}
+PARITY_TABLE = {i: 0 if bin(i).count("1") % 2 == 0 else 1 for i in range(0x80)}
 
 
 def parity(b):
@@ -18,8 +17,8 @@ def parity(b):
 
 
 def find_key(encrypted, expected):
-    """ find XOR encryption key """
-    for i in range(0xff + 1):
+    """find XOR encryption key"""
+    for i in range(0xFF + 1):
         if encrypted ^ i == expected:
             return i
 
@@ -27,14 +26,14 @@ def find_key(encrypted, expected):
 def pbin(n):
     """pretty print a binary representation 8 bits minimum"""
     s = bin(n)
-    return '0b{}'.format(s[2:].rjust(8, '0'))
+    return "0b{}".format(s[2:].rjust(8, "0"))
 
 
 def encode():
     """
     example of encoding ascii to ascii85
     """
-    si = 'POOP'
+    si = "POOP"
     e = []
     v1 = 0
     v1 += ord(si[0]) << (3 * 8)
@@ -52,23 +51,23 @@ def encode():
     e.append(chr(c2 + 33))
     e.append(chr(c3 + 33))
     e.append(chr(c4 + 33))
-    e = ''.join(e)
+    e = "".join(e)
 
 
 def extract(path):
     """
     extract a single adobe ascii85 payload from a file
     """
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         data = f.read()
     start = -1
     end = -1
     for i in range(len(data)):
-        if data[i:i+2] == '<~':
+        if data[i : i + 2] == "<~":
             start = i + 2
-        elif data[i:i+2] == '~>':
+        elif data[i : i + 2] == "~>":
             end = i
-    return data[start:end].replace('\n', '').replace(' ', '')
+    return data[start:end].replace("\n", "").replace(" ", "")
 
 
 def decode(s, conv=lambda x: x):
@@ -79,73 +78,74 @@ def decode(s, conv=lambda x: x):
     segments = ceil(len(s) / 5.0)
     for i in range(segments):
         offset = i * 5
-        segment = s[offset:offset+5]
+        segment = s[offset : offset + 5]
         pad = 5 - len(segment)
-        segment += 'u' * pad
+        segment += "u" * pad
         parts = []
         value = 0
-        value += (ord(segment[0]) - 33) * (85**4)
-        value += (ord(segment[1]) - 33) * (85**3)
-        value += (ord(segment[2]) - 33) * (85**2)
-        value += (ord(segment[3]) - 33) * (85**1)
-        value += (ord(segment[4]) - 33) * (85**0)
-        parts.append(conv(value >> 3 * 8 & 0xff))
-        parts.append(conv(value >> 2 * 8 & 0xff))
-        parts.append(conv(value >> 1 * 8 & 0xff))
-        parts.append(conv(value >> 0 * 8 & 0xff))
-        output.extend(parts[:4 - pad])
+        value += (ord(segment[0]) - 33) * (85 ** 4)
+        value += (ord(segment[1]) - 33) * (85 ** 3)
+        value += (ord(segment[2]) - 33) * (85 ** 2)
+        value += (ord(segment[3]) - 33) * (85 ** 1)
+        value += (ord(segment[4]) - 33) * (85 ** 0)
+        parts.append(conv(value >> 3 * 8 & 0xFF))
+        parts.append(conv(value >> 2 * 8 & 0xFF))
+        parts.append(conv(value >> 1 * 8 & 0xFF))
+        parts.append(conv(value >> 0 * 8 & 0xFF))
+        output.extend(parts[: 4 - pad])
     return output
 
 
 def layer0():
-    """ perform decoding of layer 1 """
-    with open('l1.txt', 'w') as f:
-        f.write(''.join(decode(extract('l0.txt'), chr)))
+    """perform decoding of layer 1"""
+    with open("l1.txt", "w") as f:
+        f.write("".join(decode(extract("l0.txt"), chr)))
 
 
 def layer1():
-    """ perform decoding of layer 2 """
+    """perform decoding of layer 2"""
+
     def conv(c):
         c = c ^ 0x55
         return chr((c >> 1) | ((c & 0b1) << 7))
 
-    with open('l2.txt', 'w') as f:
-        f.write(''.join(decode(extract('l1.txt'), conv)))
+    with open("l2.txt", "w") as f:
+        f.write("".join(decode(extract("l1.txt"), conv)))
 
 
 def layer2():
-    """ perform decoding of layer 3 """
-    data = list(filter(parity, decode(extract('l2.txt'))))
+    """perform decoding of layer 3"""
+    data = list(filter(parity, decode(extract("l2.txt"))))
     output = []
     byte = 0
     for i, b in enumerate(data):
         i = (i % 8) + 1
         if i > 1:
-            byte |= (b >> 8 - (i - 1)) & 0xff
+            byte |= (b >> 8 - (i - 1)) & 0xFF
             output.append(chr(byte))
-        byte = ((b >> 1) << i) & 0xff
+        byte = ((b >> 1) << i) & 0xFF
 
-    with open('l3.txt', 'w') as f:
-        f.write(''.join(output))
+    with open("l3.txt", "w") as f:
+        f.write("".join(output))
 
 
 def layer3():
-    """ perform decoding of layer 4 """
-    with open('key.json', 'r') as f:
+    """perform decoding of layer 4"""
+    with open("key.json", "r") as f:
         key = json.load(f)
 
-    data = decode(extract('l3.txt'))
+    data = decode(extract("l3.txt"))
     output = []
     for e, k in zip(data, cycle(key)):
         output.append(chr(e ^ k))
 
-    with open('l4.txt', 'w') as f:
-        f.write(''.join(output))
+    with open("l4.txt", "w") as f:
+        f.write("".join(output))
 
 
 def layer4():
-    """ perform decoding of layer 5 """
-    data = bytes(decode(extract('l4.txt')))
+    """perform decoding of layer 5"""
+    data = bytes(decode(extract("l4.txt")))
     output = []
     offset = 0
     max_offset = len(data)
@@ -153,20 +153,20 @@ def layer4():
         p = ipv4.IPv4Packet(data[offset:])
         offset += p.total_length
         if p.valid:
-            output.append(p.data.content.decode('ascii'))
+            output.append(p.data.content.decode("ascii"))
 
-    with open('l5.txt', 'w') as f:
-        f.write(''.join(output))
+    with open("l5.txt", "w") as f:
+        f.write("".join(output))
 
 
-if __name__ == '__main__':
-    if not os.path.exists('l1.txt'):
+if __name__ == "__main__":
+    if not os.path.exists("l1.txt"):
         layer0()
-    if not os.path.exists('l2.txt'):
+    if not os.path.exists("l2.txt"):
         layer1()
-    if not os.path.exists('l3.txt'):
+    if not os.path.exists("l3.txt"):
         layer2()
-    if not os.path.exists('l4.txt'):
+    if not os.path.exists("l4.txt"):
         layer3()
-    if not os.path.exists('l5.txt'):
+    if not os.path.exists("l5.txt"):
         layer4()
