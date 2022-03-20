@@ -1,7 +1,11 @@
 import json
 import os
+import struct
+import subprocess
 from itertools import cycle
 from math import ceil
+
+from Crypto.Cipher import AES
 
 import ipv4
 
@@ -21,6 +25,22 @@ def find_key(encrypted, expected):
     for i in range(0xFF + 1):
         if encrypted ^ i == expected:
             return i
+
+
+def aes_unwrap_key(wkey, kek, iv):
+    iv = struct.unpack(">Q", iv)[0]
+    buf = list(struct.unpack(f">{len(wkey) // 8}Q", wkey))
+    blocks = len(buf) - 1
+
+    for j in range(5, -1, -1):
+        for i in range(blocks, 0, -1):
+            buf[0] = buf[0] ^ (blocks * j + i)
+            data = struct.pack(">2Q", buf[0], buf[i])
+            cipher = AES.new(kek, AES.MODE_ECB)
+            buf[0], buf[i] = struct.unpack(">2Q", cipher.decrypt(data))
+
+    if buf[0] == iv:
+        return struct.pack(f">{len(buf) - 1}Q", *buf[1:])
 
 
 def pbin(n):
@@ -159,6 +179,31 @@ def layer4():
         f.write("".join(output))
 
 
+def layer5():
+    """perform decoding of layer 6"""
+    data = decode(extract("l5.txt"))
+
+    key = aes_unwrap_key(bytes(data[40:80]), bytes(data[:32]), bytes(data[32:40]))
+    key = "".join(map("{:02x}".format, key))
+    iv = "".join(map("{:02x}".format, data[80:96]))
+
+    subprocess.run(
+        [
+            "openssl",
+            "aes-256-ctr",
+            "-d",
+            "-K",
+            key,
+            "-iv",
+            iv,
+            "-out",
+            "l6.txt",
+        ],
+        input=bytes(data[96:]),
+        check=True,
+    )
+
+
 if __name__ == "__main__":
     if not os.path.exists("l1.txt"):
         layer0()
@@ -170,3 +215,5 @@ if __name__ == "__main__":
         layer3()
     if not os.path.exists("l5.txt"):
         layer4()
+    if not os.path.exists("l6.txt"):
+        layer5()
