@@ -7,6 +7,7 @@ from math import ceil
 
 from Crypto.Cipher import AES
 
+import emu
 import ipv4
 
 # parity bit lookup table for all 7 bit integers
@@ -49,31 +50,6 @@ def pbin(n):
     return "0b{}".format(s[2:].rjust(8, "0"))
 
 
-def encode():
-    """
-    example of encoding ascii to ascii85
-    """
-    si = "POOP"
-    e = []
-    v1 = 0
-    v1 += ord(si[0]) << (3 * 8)
-    v1 += ord(si[1]) << (2 * 8)
-    v1 += ord(si[2]) << (1 * 8)
-    v1 += ord(si[3]) << (0 * 8)
-    v2 = v1
-    v2, c4 = divmod(v2, 85)
-    v2, c3 = divmod(v2, 85)
-    v2, c2 = divmod(v2, 85)
-    v2, c1 = divmod(v2, 85)
-    v2, c0 = divmod(v2, 85)
-    e.append(chr(c0 + 33))
-    e.append(chr(c1 + 33))
-    e.append(chr(c2 + 33))
-    e.append(chr(c3 + 33))
-    e.append(chr(c4 + 33))
-    e = "".join(e)
-
-
 def extract(path):
     """
     extract a single adobe ascii85 payload from a file
@@ -103,11 +79,11 @@ def decode(s, conv=lambda x: x):
         segment += "u" * pad
         parts = []
         value = 0
-        value += (ord(segment[0]) - 33) * (85 ** 4)
-        value += (ord(segment[1]) - 33) * (85 ** 3)
-        value += (ord(segment[2]) - 33) * (85 ** 2)
-        value += (ord(segment[3]) - 33) * (85 ** 1)
-        value += (ord(segment[4]) - 33) * (85 ** 0)
+        value += (ord(segment[0]) - 33) * (85**4)
+        value += (ord(segment[1]) - 33) * (85**3)
+        value += (ord(segment[2]) - 33) * (85**2)
+        value += (ord(segment[3]) - 33) * (85**1)
+        value += (ord(segment[4]) - 33) * (85**0)
         parts.append(conv(value >> 3 * 8 & 0xFF))
         parts.append(conv(value >> 2 * 8 & 0xFF))
         parts.append(conv(value >> 1 * 8 & 0xFF))
@@ -204,6 +180,14 @@ def layer5():
     )
 
 
+def layer6():
+    """perform decoding of layer 7"""
+    program = decode(extract("l6.txt"))
+    tomtel = emu.Tomtel()
+    with open("l7.txt", "w") as f:
+        f.write(tomtel.run(program))
+
+
 if __name__ == "__main__":
     if not os.path.exists("l1.txt"):
         layer0()
@@ -217,3 +201,5 @@ if __name__ == "__main__":
         layer4()
     if not os.path.exists("l6.txt"):
         layer5()
+    if not os.path.exists("l7.txt"):
+        layer6()
